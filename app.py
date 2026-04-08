@@ -111,7 +111,7 @@ if uploaded_files:
 
         # 1. Plotly 交互式圆环图
         with v_col1:
-            st.markdown("#### 🍩 星级健康度分布 (交互式)")
+            st.markdown("#### ⭐ 星级健康度分布")
             if sel_rating != "无":
                 # 准备数据
                 rating_data = final_df[sel_rating].value_counts().sort_index(ascending=False).reset_index()
