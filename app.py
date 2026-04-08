@@ -30,7 +30,7 @@ except Exception:
 # 1. 页面基础配置
 # ==========================================
 st.set_page_config(
-    page_title="穿针引线集团 | 全维度VOC智能助手",
+    page_title="穿针引线跨境电商 | 全维度VOC智能助手",
     page_icon="📊",
     layout="wide"
 )
@@ -55,7 +55,6 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🚀 亚马逊全维度 VOC 深度洞察助手")
-st.caption("穿针引线集团第二届 AI 竞赛参赛作品 - 提效赋能方案 | Plotly 交互视觉版")
 st.markdown("---")
 
 # ==========================================
