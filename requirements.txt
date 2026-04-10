@@ -6,3 +6,4 @@ wordcloud
 nltk
 plotly
 openpyxl
+python-docx
