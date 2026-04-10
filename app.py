@@ -281,7 +281,7 @@ if uploaded_files:
                         doc = Document()
 
                         # 设置文档默认字体
-                        doc.styles['Normal'].font.name = '微软雅黑'
+                        doc.styles['Normal'].font.name = '宋体'
                         doc.styles['Normal'].font.size = Pt(10.5)
                         doc.styles['Normal'].paragraph_format.line_spacing = 1.5
 
