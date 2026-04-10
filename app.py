@@ -2,14 +2,17 @@ import streamlit as st
 import pandas as pd
 from openai import OpenAI
 import io
+import re  # 【新增】正则解析Markdown格式
 
 # === 🌟 可视化相关库 🌟 ===
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud, STOPWORDS
 import nltk
 from nltk.corpus import stopwords
-import re
-import plotly.express as px  # 新增 Plotly 库
+import plotly.express as px
+from docx import Document
+from docx.shared import Pt, RGBColor
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 
 # ==========================================
 # 0. 全局美化设置 & NLTK 初始化
@@ -25,6 +28,69 @@ try:
     nltk.download('stopwords', quiet=True)
 except Exception:
     st.error("NLTK 停用词下载失败，词云图效果可能不佳。请检查网络。")
+
+
+# ==========================================
+# 【核心新增】Markdown转Word格式处理函数
+# ==========================================
+def add_markdown_to_word(doc, markdown_text):
+    """
+    解析Markdown文本，转为Word原生格式，自动清除Markdown标记，保留排版层级
+    """
+    # 按行拆分文本，逐行处理
+    lines = markdown_text.split('\n')
+    # 预编译正则，提升效率
+    heading_pattern = re.compile(r'^(#{1,6})\s+(.*)$')  # 匹配标题 # 标题内容
+    bold_pattern = re.compile(r'\*\*(.*?)\*\*')  # 匹配加粗 **内容**
+    list_pattern = re.compile(r'^-\s+(.*)$')  # 匹配无序列表 - 内容
+    hr_pattern = re.compile(r'^---+$')  # 匹配分隔线 ---
+
+    for line in lines:
+        line = line.strip()
+        # 1. 处理空行
+        if not line:
+            doc.add_paragraph()
+            continue
+
+        # 2. 处理分隔线 ---
+        if hr_pattern.match(line):
+            p = doc.add_paragraph()
+            p.add_run()
+            continue
+
+        # 3. 处理标题 #/##/###
+        heading_match = heading_pattern.match(line)
+        if heading_match:
+            level = len(heading_match.group(1))
+            title_content = heading_match.group(2)
+            # 清除标题内容里的加粗标记
+            title_content = bold_pattern.sub(r'\1', title_content)
+            doc.add_heading(title_content, level=level)
+            continue
+
+        # 4. 处理无序列表 -
+        list_match = list_pattern.match(line)
+        if list_match:
+            list_content = list_match.group(1)
+            p = doc.add_paragraph(style='List Bullet')
+        else:
+            # 普通段落
+            p = doc.add_paragraph()
+
+        # 5. 处理行内加粗 **内容**，拆分文本分段设置加粗
+        parts = bold_pattern.split(line)
+        for i, part in enumerate(parts):
+            if not part:
+                continue
+            run = p.add_run(part)
+            # 偶数位是**包裹的内容，设置加粗
+            if i % 2 == 1:
+                run.bold = True
+            # 设置全局字体和字号
+            run.font.name = '微软雅黑'
+            run.font.size = Pt(10.5)
+            run.font.color.rgb = RGBColor(0, 0, 0)
+
 
 # ==========================================
 # 1. 页面基础配置
@@ -49,7 +115,6 @@ st.markdown("""
     .stButton>button:hover { background-color: #0056b3; transform: translateY(-2px); }
     h1 { font-weight: 800; color: #E0E0E0; }
     h3 { font-weight: 600; color: #4DA8DA; }
-    /* 让 Plotly 图标适配暗黑模式 */
     .js-plotly-plot .plotly .modebar { left: 0; }
     </style>
     """, unsafe_allow_html=True)
@@ -76,7 +141,7 @@ if uploaded_files:
     for file in uploaded_files:
         try:
             if file.name.endswith('.csv'):
-                df = pd.read_csv(file, encoding='utf-8-sig')  # 默认常用编码
+                df = pd.read_csv(file, encoding='utf-8-sig')
             else:
                 df = pd.read_excel(file)
             all_dfs.append(df)
@@ -101,24 +166,20 @@ if uploaded_files:
             sel_body = st.selectbox("3. 选择【正文】列", cols)
 
         # ==========================================
-        # 5. 可视化分析部分 (Plotly 升级)
+        # 5. 可视化分析部分
         # ==========================================
         st.markdown("---")
         st.markdown("### 📊 第三步：数据可视化概览")
-
-        # 调整列宽比例 [1.5, 1, 1] 放大圆环图的占比
         v_col1, v_col2, v_col3 = st.columns([1.5, 1, 1])
 
-        # 1. Plotly 交互式圆环图
+        # 星级分布圆环图
         with v_col1:
             st.markdown("#### ⭐ 星级健康度分布")
             if sel_rating != "无":
-                # 准备数据
                 rating_data = final_df[sel_rating].value_counts().sort_index(ascending=False).reset_index()
                 rating_data.columns = ['Rating', 'Count']
                 rating_data['Rating'] = rating_data['Rating'].astype(str) + " Star"
 
-                # 创建 Plotly 圆环图
                 fig_plotly = px.pie(
                     rating_data,
                     values='Count',
@@ -126,8 +187,6 @@ if uploaded_files:
                     hole=0.5,
                     color_discrete_sequence=['#4A90E2', '#50E3C2', '#F5A623', '#F8E71C', '#D0021B']
                 )
-
-                # 调整布局适配暗黑模式
                 fig_plotly.update_layout(
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)',
@@ -136,14 +195,12 @@ if uploaded_files:
                     margin=dict(t=10, b=10, l=10, r=10)
                 )
                 fig_plotly.update_traces(textposition='inside', textinfo='percent+label')
-
-                # 在 Streamlit 中显示
                 st.plotly_chart(fig_plotly, use_container_width=True)
             else:
                 st.warning("未选择星级列。")
 
 
-        # 定义生成透明词云图的函数
+        # 词云图生成函数
         def generate_wc(df, col, stops, title_text, col_name, color_scheme):
             text = " ".join(df[col].astype(str).tolist())
             if len(text) > 10:
@@ -157,7 +214,7 @@ if uploaded_files:
                     st.pyplot(fig_wc, transparent=True)
 
 
-        # 词云图生成
+        # 词云图渲染
         english_stops = set(stopwords.words('english'))
         extended_stops = STOPWORDS.union(english_stops).union({"product", "amazon", "item", "pajamas", "pajama"})
 
@@ -168,7 +225,7 @@ if uploaded_files:
             generate_wc(neg_df, sel_body, extended_stops, "⚠️ 高频痛点词", v_col3, 'YlOrRd')
 
         # ==========================================
-        # 6. AI 分析
+        # 6. AI 分析 & Word导出优化
         # ==========================================
         st.markdown("---")
         if st.button("🔥 第四步：启动 AI 深度洞察分析"):
@@ -213,16 +270,39 @@ if uploaded_files:
                         )
                         final_report = response.choices[0].message.content
 
-                        # 使用原生的 success 容器，自带绿色边框和极佳的可读性，彻底解决文字隐身问题
                         st.markdown("### 🏆 AI 深度洞察报告")
                         with st.container():
                             st.info(final_report)
 
+                        # ==========================================
+                        # 【完全重写】Word文档生成逻辑
+                        # ==========================================
+                        # 初始化Word文档
+                        doc = Document()
+
+                        # 设置文档默认字体
+                        doc.styles['Normal'].font.name = '微软雅黑'
+                        doc.styles['Normal'].font.size = Pt(10.5)
+                        doc.styles['Normal'].paragraph_format.line_spacing = 1.5
+
+                        # 添加报告封面标题
+                        title_para = doc.add_heading('亚马逊全维度 VOC 深度洞察报告', 0)
+                        title_para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+
+                        # 核心：用自定义函数解析Markdown，写入Word（无多余符号，原生格式）
+                        add_markdown_to_word(doc, final_report)
+
+                        # 保存到内存缓冲区
+                        buffer = io.BytesIO()
+                        doc.save(buffer)
+                        buffer.seek(0)
+
+                        # 下载按钮
                         st.download_button(
-                            label="📥 下载报告为文本文件",
-                            data=final_report,
-                            file_name="Amazon_VOC_Report.txt",
-                            mime="text/plain"
+                            label="📥 下载报告为 Word 文档",
+                            data=buffer,
+                            file_name="Amazon_VOC_Report.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         )
                     except Exception as ai_err:
                         st.error(f"AI 分析出现错误: {str(ai_err)}")
