@@ -128,8 +128,8 @@ st.markdown("---")
 with st.sidebar:
     st.header("🔑 配置中心")
     api_key = st.text_input("输入 API Key", type="password")
-    base_url = st.selectbox("选择供应商", ["https://api.deepseek.com", "https://api.openai.com/v1"], index=0)
-    model_name = st.text_input("模型名称", value="deepseek-chat")
+    base_url = st.text_input("选择供应商", value="https://api.deepseek.com")
+    model_name = st.selectbox("模型名称", ["deepseek-chat", "deepseek-reasoner"], index=0)
 
 # ==========================================
 # 3. 文件读取
